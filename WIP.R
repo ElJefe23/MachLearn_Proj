@@ -5,25 +5,36 @@ require(caret)
 require(rpart)
 require(gbm)
 require(ipred)
+require(randomForest)
 trainDat<-read.csv("pml-training.csv")
+testDat<-read.csv("pml-testing.csv")
 ## Delete columns with NAs
-filteredTrain<-trainDat[,(colSums(is.na(trainDat))==0)]
+filteredTrain<-trainDat[,((colSums(is.na(trainDat))==0) & (colSums(trainDat=="")==0))]
+filteredTest<-testDat[,((colSums(is.na(testDat))==0) & (colSums(testDat=="")==0))]
 ## Take away the variables related to username and time; these are non-sensical in the final
 ## model.
-secFilterDat<-filteredTrain[,-c(1:7)]
-## Need to exclude columns with missing data, as well.
-tertFilterDat<-secFilterDat[,-c(5:13,36:41,45:53,67:75)]
+parsedTrain<-filteredTrain[,-c(1:7)]
+parsedTest<-filteredTest[,-c(1:7)]
+## Split the training data into two sets to perform validation.
+randomSelect<-createDataPartition(parsedTrain$classe, p=0.7, list=FALSE)
+myTrain<-parsedTrain[randomSelect,]
+myVal<-parsedTrain[-randomSelect,]
 ## A couple of short classification tree algorithms.
-treeModel<-train(classe~.,data=tertFilterDat,method="rpart")
-confusionMatrix(predict(treeModel,tertFilterDat),tertFilterDat$classe)
+treeModel<-train(classe~.,data=myTrain,method="rpart")
 ## The other algorithm.
-treeModel2<-train(classe~.,data=tertFilterDat,method="rpart2")
-confusionMatrix(predict(treeModel2,tertFilterDat),tertFilterDat$classe)
-## Why not one more with a larger explicit depth.
-treeModel3<-train(classe~.,data=tertFilterDat,method="rpart2",maxdepth=8)
-## Didn't do anything different.
-## How about a bagging model?
-treeModel4<-train(classe~.,data=tertFilterDat,method="treebag")
-## This is damn near perfect.  So ... it takes a few hours (~2) but it definitely works.
-## I'm sure the predictions will be perfect as well.
-## But ... how do I get more information from the model?
+treeModel2<-train(classe~.,data=myTrain,method="rpart2")
+#These probably suck.
+
+## How about a random forest model?
+treeModelRF<-randomForest(classe~.,data=myTrain,ntree=100)
+treeModelRF2<-randomForest(classe~.,data=myTrain,ntree=200)
+treeModelRF4<-randomForest(classe~.,data=myTrain,ntree=400)
+## Which are the important variables?
+varImpPlot(treeModelRF, sort=TRUE, n.var=15, main="Random Forest - 100 trees")
+varImpPlot(treeModelRF2, sort=TRUE, n.var=15, main="Random Forest - 200 trees")
+varImpPlot(treeModelRF4, sort=TRUE, n.var=15, main="Random Forest - 400 trees")
+
+## We need to figure out how to present the confusion matriz results more succinctly.
+RFMatrix<-confusionMatrix(predict(treeModelRF,myVal), myVal$classe)
+RF2Matrix<-confusionMatrix(predict(treeModelRF2,myVal), myVal$classe)
+RF4Matrix<-confusionMatrix(predict(treeModelRF4,myVal), myVal$classe)

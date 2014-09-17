@@ -1,0 +1,125 @@
+---
+title: "Machine Learning Project"
+author: "Jeff Wolbach"
+date: "Wednesday, September 17, 2014"
+output: html_document
+---
+
+We were tasked to use a set of data collected from accelerometers placed on the belts, forearms, arms and dumbells of six partcipants to investigate whether the data allowed for determination of whether the participants were performing certain exercises correctly, and if it could be identified in which way the exercise was being performed incorrectly.
+
+The initial task of the analysis was to load the dataset provided to train our mathematical model, as well as a set of data provided to test our model. We also load the R-packages we expect to use when performing the analysis (not shown because I can't figure out how to suppress the output messages).
+
+```{r, results='hide'}
+setwd("~/GitHub/MachLearn_Proj")
+trainDat<-read.csv("pml-training.csv")
+testDat<-read.csv("pml-testing.csv")
+```
+```{r,echo=FALSE}
+require(ada)
+require(caret)
+require(rpart)
+require(gbm)
+require(ipred)
+require(randomForest)
+```
+  
+The provided datasets contain 159 variables that could potentially be used to predict the desired outcome value, labeled as "classe" in the training data set.  The variable "classe" is a text/factor variable that varies from A-E to indicate whether the exercise was performed correctly or in one of four incorrect fashions.
+
+The training and test datasets also contain many columns/variables that are incomplete or have missing values; we do not want to consider these in our model and remove them from the datasets:
+
+```{r}
+filteredTrain<-trainDat[,((colSums(is.na(trainDat))==0) & (colSums(trainDat=="")==0))]
+filteredTest<-testDat[,((colSums(is.na(testDat))==0) & (colSums(testDat=="")==0))]
+```
+
+Visual inspection of the training and test datasets revealed that the first 7 columns of data were very unlikely to be related to "classe".  These columns (row number x, user_name, three columns related to the time of data collection, and two labled as new_window) were deleted from both the training and test datasets.
+
+```{r}
+parsedTrain<-filteredTrain[,-c(1:7)]
+parsedTest<-filteredTest[,-c(1:7)]
+```
+
+The resulting datasets contained 52 variables that could be potentially used to model the values of classe.
+
+
+Prior to training the model, the training dataset was subsetted to create a validation dataset.
+
+```{r, cache=TRUE}
+randomSelect<-createDataPartition(parsedTrain$classe, p=0.7, list=FALSE)
+myTrain<-parsedTrain[randomSelect,]
+myVal<-parsedTrain[-randomSelect,]
+```
+
+The model will be trained using the dataset "myTrain" and the dataset "myVal" will be used to predict the out-of-sample error and help choose between proposed models.  The "myTrain" dataset contains 13,737 observations and the "myVal" dataset contains 5,885 observations.
+
+The data will be modeled as a classification problem.  The first two models generated will be single-tree decision trees, using two default algorithms from the caret package.
+
+```{r, cache=TRUE}
+treeModel1<-train(classe~.,data=myTrain,method="rpart")
+treeModel2<-train(classe~.,data=myTrain,method="rpart2")
+```
+
+Using these models to classify the validation data set generated mediocre results.
+
+```{r, cache=TRUE}
+tree1Matrix<-confusionMatrix(predict(treeModel1,myVal), myVal$classe)
+print(tree1Matrix$overall["Accuracy"])
+```
+
+```{r, cache=TRUE}
+tree2Matrix<-confusionMatrix(predict(treeModel2,myVal), myVal$classe)
+print(tree2Matrix$overall["Accuracy"])
+```
+
+This motivated the training of three random forest models.  The three models differ in the number of trees generated, and in processing time (more trees = longer processing time).
+
+```{r,cache=TRUE}
+treeModelRF<-randomForest(classe~.,data=myTrain,ntree=100)
+treeModelRF2<-randomForest(classe~.,data=myTrain,ntree=200)
+treeModelRF4<-randomForest(classe~.,data=myTrain,ntree=400)
+```
+
+We then compare the ability of each model to classify the validation set:
+
+```{r, cache=TRUE}
+RFMatrix<-confusionMatrix(predict(treeModelRF,myVal), myVal$classe)
+RF2Matrix<-confusionMatrix(predict(treeModelRF2,myVal), myVal$classe)
+RF4Matrix<-confusionMatrix(predict(treeModelRF4,myVal), myVal$classe)
+```
+
+With 100 trees
+```{r}
+print(RFMatrix$overall["Accuracy"])
+```
+
+The accuracy is excellent.  Increasing the number of trees to 200 ...
+```{r}
+print(RF2Matrix$overall["Accuracy"])
+```
+
+or 400 ...
+```{r}
+print(RF4Matrix$overall["Accuracy"])
+```
+
+Provides no improvement in accuracy.
+
+We may also compare the most important variables in each of the three models:
+
+```{r}
+varImpPlot(treeModelRF, sort=TRUE, n.var=15, main="Random Forest - 100 trees")
+varImpPlot(treeModelRF2, sort=TRUE, n.var=15, main="Random Forest - 200 trees")
+varImpPlot(treeModelRF4, sort=TRUE, n.var=15, main="Random Forest - 400 trees")
+```
+
+All three plots show a similar shape; increasing the number of trees does not lead to a change in the number of variables predicted to have large Mean Decreases in the Gini coefficient.  The three models also share 14 of their 15 most important variables (the 100- and 400-tree models share all 15).  As increasing the number of trees does not improve the accuracy on the validationset, and does not effect the variable selection, I recommend use of the 100-tree random forest model (treeModelRF) for classifying the true test set.
+
+A more detailed presentation of the accuracy of the 100-tree RF model
+
+```{r}
+RFMatrix$table
+```
+
+Shows >95% accuracy for all values of classe, increasing our confidence that treeModelRF will be able to accurately classify the true test set.
+
+Post-script:  When applied to the true test set, the model correctly classified all 20 observatons.
