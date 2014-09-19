@@ -5,16 +5,17 @@ date: "Wednesday, September 17, 2014"
 output: html_document
 ---
 
-We were tasked to use a set of data collected from accelerometers placed on the belts, forearms, arms and dumbells of six partcipants to investigate whether the data allowed for determination of whether the participants were performing certain exercises correctly, and if it could be identified in which way the exercise was being performed incorrectly.
+We were tasked to use a set of data collected from accelerometers placed on the belts, forearms, arms and dumbbells of six partcipants to investigate whether the data allowed for determination of whether the participants were performing certain exercises correctly, and if it could be identified in which way the exercise was being performed incorrectly.
 
-The initial task of the analysis was to load the dataset provided to train our mathematical model, as well as a set of data provided to test our model. We also load the R-packages we expect to use when performing the analysis (not shown because I can't figure out how to suppress the output messages).
+### Data Preparation
+The initial task of the analysis was to load a pair of datasets: one provided to train our mathematical model, and one provided to test our model. We also load the R-packages we expect to use when performing the analysis. 
 
 ```{r, results='hide'}
 setwd("~/GitHub/MachLearn_Proj")
 trainDat<-read.csv("pml-training.csv")
 testDat<-read.csv("pml-testing.csv")
 ```
-```{r,echo=FALSE}
+```{r}
 require(ada)
 require(caret)
 require(rpart)
@@ -39,8 +40,7 @@ parsedTrain<-filteredTrain[,-c(1:7)]
 parsedTest<-filteredTest[,-c(1:7)]
 ```
 
-The resulting datasets contained 52 variables that could be potentially used to model the values of classe.
-
+The resulting datasets contained 52 variables that could potentially be used to model the values of 'classe'.  We processed the test dataset at this time to ensure that it would have the same structure as the training dataset; we could then apply our developed model directly without having to process the test dataset separately.
 
 Prior to training the model, the training dataset was subsetted to create a validation dataset.
 
@@ -52,6 +52,8 @@ myVal<-parsedTrain[-randomSelect,]
 
 The model will be trained using the dataset "myTrain" and the dataset "myVal" will be used to predict the out-of-sample error and help choose between proposed models.  The "myTrain" dataset contains 13,737 observations and the "myVal" dataset contains 5,885 observations.
 
+### Modeling
+#### Single Decision Trees
 The data will be modeled as a classification problem.  The first two models generated will be single-tree decision trees, using two default algorithms from the caret package.
 
 ```{r, cache=TRUE}
@@ -71,6 +73,7 @@ tree2Matrix<-confusionMatrix(predict(treeModel2,myVal), myVal$classe)
 print(tree2Matrix$overall["Accuracy"])
 ```
 
+#### Random Forests
 This motivated the training of three random forest models.  The three models differ in the number of trees generated, and in processing time (more trees = longer processing time).
 
 ```{r,cache=TRUE}
@@ -79,7 +82,7 @@ treeModelRF2<-randomForest(classe~.,data=myTrain,ntree=200)
 treeModelRF4<-randomForest(classe~.,data=myTrain,ntree=400)
 ```
 
-We then compare the ability of each model to classify the validation set:
+We can compare the ability of each model to classify the validation set:
 
 ```{r, cache=TRUE}
 RFMatrix<-confusionMatrix(predict(treeModelRF,myVal), myVal$classe)
@@ -102,9 +105,9 @@ or 400 ...
 print(RF4Matrix$overall["Accuracy"])
 ```
 
-Provides no improvement in accuracy.
+provides no improvement in accuracy.
 
-We may also compare the most important variables in each of the three models:
+We also compare the most important variables in each of the three models:
 
 ```{r}
 varImpPlot(treeModelRF, sort=TRUE, n.var=15, main="Random Forest - 100 trees")
@@ -112,7 +115,7 @@ varImpPlot(treeModelRF2, sort=TRUE, n.var=15, main="Random Forest - 200 trees")
 varImpPlot(treeModelRF4, sort=TRUE, n.var=15, main="Random Forest - 400 trees")
 ```
 
-All three plots show a similar shape; increasing the number of trees does not lead to a change in the number of variables predicted to have large Mean Decreases in the Gini coefficient.  The three models also share 14 of their 15 most important variables (the 100- and 400-tree models share all 15).  As increasing the number of trees does not improve the accuracy on the validationset, and does not effect the variable selection, I recommend use of the 100-tree random forest model (treeModelRF) for classifying the true test set.
+All three plots show a similar shape; increasing the number of trees does not lead to a change in the number of variables predicted to have large Mean Decreases in the Gini coefficient.  The three models also share 14 of their 15 most important variables (the 100- and 400-tree models share all 15).  As increasing the number of trees does not improve the accuracy on the validation set, and does not effect the variable selection, I recommend use of the 100-tree random forest model (treeModelRF) for classifying the true test set.
 
 A more detailed presentation of the accuracy of the 100-tree RF model
 
@@ -120,6 +123,7 @@ A more detailed presentation of the accuracy of the 100-tree RF model
 RFMatrix$table
 ```
 
-Shows >95% accuracy for all values of classe, increasing our confidence that treeModelRF will be able to accurately classify the true test set.
+Shows >95% accuracy for all values of 'classe', increasing our confidence that treeModelRF will be able to accurately classify the true test set.
 
-Post-script:  When applied to the true test set, the model correctly classified all 20 observatons.
+####Post-script:  
+When applied to the true test set, the model correctly classified all 20 observations.
